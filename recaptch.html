@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>reCAPTCHA v2 - Capturar Token</title>
+
+  <!-- Google reCAPTCHA -->
+  <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; padding: 2rem; }
+    .card { max-width: 640px; margin: auto; border: 1px solid #ddd; padding: 1.25rem; border-radius: 8px; }
+    .token { word-break: break-all; background:#f4f4f4; padding: .5rem; border-radius:4px; margin-top:.5rem; font-family: monospace; }
+    .ok { color: #007700; }
+    .err { color: #b00020; }
+    button { margin-top: 1rem; padding: .5rem 1rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>reCAPTCHA v2 — Capturar token</h2>
+
+    <!-- Form: o action é "#", a submissão será tratada em JS -->
+    <form id="recaptchaForm" action="#" method="POST" onsubmit="return onSubmit(event);">
+      <!-- widget: substitua a sitekey se precisar -->
+      <div class="g-recaptcha" data-sitekey="YOUR_KEY" data-callback="onRecaptchaSuccess" data-expired-callback="onRecaptchaExpired"></div>
+
+      <br/>
+      <button type="submit">Enviar (capturar token)</button>
+    </form>
+
+    <hr/>
+
+    <div>
+      <strong>Último token capturado:</strong>
+      <div id="tokenContainer" class="token">Nenhum token ainda</div>
+    </div>
+
+    <div id="verifyResult" style="margin-top:.5rem"></div>
+  </div>
+
+  <script>
+    // Guarda o token atual
+    let currentToken = null;
+
+    // Callback chamado quando o usuário resolve o captcha (configurado no data-callback)
+    function onRecaptchaSuccess(token) {
+      currentToken = token;
+      showToken(token, 'ok');
+      console.log('g-recaptcha-response token:', token);
+      // se quiser enviar automaticamente ao backend, chame verifyOnServer(token)
+      // verifyOnServer(token);
+    }
+
+    // Callback chamado quando o token expira
+    function onRecaptchaExpired() {
+      currentToken = null;
+      showToken('Token expirado', 'err');
+      console.warn('reCAPTCHA token expired');
+    }
+
+    function showToken(text, state) {
+      const el = document.getElementById('tokenContainer');
+      el.textContent = text;
+      el.className = 'token ' + (state === 'ok' ? 'ok' : (state === 'err' ? 'err' : ''));
+    }
+
+    // Função chamada ao submeter o formulário
+    function onSubmit(event) {
+      event.preventDefault(); // evita submit padrão
+
+      // tenta ler token do grecaptcha se não tivermos via callback
+      try {
+        const widgetToken = grecaptcha.getResponse();
+        if (widgetToken && widgetToken.length > 0) {
+          currentToken = widgetToken;
+          showToken(widgetToken, 'ok');
+          console.log('Token (from grecaptcha.getResponse()):', widgetToken);
+        }
+      } catch (e) {
+        console.warn('grecaptcha not available yet', e);
+      }
+
+      if (!currentToken) {
+        showToken('Nenhum token - resolva o captcha primeiro', 'err');
+        return false;
+      }
+
+      // opcional: enviar para backend (descomentar para ativar)
+      // verifyOnServer(currentToken);
+
+      // exemplo: apenas mostrar resultado de sucesso local
+      const result = document.getElementById('verifyResult');
+      result.innerHTML = '<span class="ok">Token pronto (verifique no servidor):</span><br/><code>' + currentToken + '</code>';
+
+      // reset do widget para permitir novo token (opcional)
+      // grecaptcha.reset();
+
+      return false; // já tratamos
+    }
+
+    // exemplo: enviar token ao backend para validação (POST JSON)
+    function verifyOnServer(token) {
+      // Ajuste a URL para o seu endpoint que valida com a secret no servidor
+      const url = '/api/recaptcha/verify'; // exemplo
+
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token })
+      })
+      .then(resp => resp.json())
+      .then(json => {
+        console.log('Server verification response:', json);
+        const result = document.getElementById('verifyResult');
+        result.innerHTML = '<pre>' + JSON.stringify(json, null, 2) + '</pre>';
+      })
+      .catch(err => {
+        console.error('Error verifying token on server', err);
+        const result = document.getElementById('verifyResult');
+        result.innerHTML = '<span class="err">Erro ao verificar token no servidor</span>';
+      });
+    }
+  </script>
+</body>
+</html>
+
